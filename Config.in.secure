@@ -1,7 +1,7 @@
 config CONFIG_SECURE
 	bool "Secure Mode support"
 	default n
-	depends on CPU_HAS_AES
+	depends on CPU_HAS_AES && !CONFIG_LOAD_LINUX && !CONFIG_LOAD_ANDROID
 	select CONFIG_AES
 	help
 	  Decrypt and check the signature of the application file
@@ -25,8 +25,6 @@ config	CONFIG_AES_KEY_SIZE_256
 	bool "AES-256"
 
 endchoice
-
-comment "Big-endian order: Word0 is the most significant word"
 
 config CONFIG_AES_CIPHER_KEY_WORD0
 	hex "Cipher Key Word0"
