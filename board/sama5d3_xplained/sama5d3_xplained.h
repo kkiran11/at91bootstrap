@@ -34,13 +34,41 @@
  * The main oscillator is enabled as soon as possible in the lowlevel_clock_init
  * and MCK is switched on the main oscillator.
  */
+#if defined(CONFIG_CPU_CLK_512MHZ)
+#define BOARD_MAINOSC		48000000
+#else
 #define BOARD_MAINOSC		12000000
+#endif
 
 #if defined(CONFIG_BUS_SPEED_133MHZ)
 
+#if defined(CONFIG_CPU_CLK_512MHZ)
+#define MASTER_CLOCK		128000000
+#else
 #define MASTER_CLOCK		132000000
+#endif
 
-#if defined(CONFIG_CPU_CLK_528MHZ)
+#if defined(CONFIG_CPU_CLK_512MHZ)
+/* PCK = 528MHz, MCK = 128MHz */
+#define PLLA_MULA		63
+#define BOARD_PCK		((unsigned long)(BOARD_MAINOSC * \
+							(PLLA_MULA + 1)) / 6)
+/*#define BOARD_MCK		((unsigned long)((BOARD_MAINOSC * \
+							(PLLA_MULA + 1)) / 4))*/
+#define BOARD_MCK		((unsigned long)((BOARD_PCK / 4))
+
+#define BOARD_CKGR_PLLA		(AT91C_CKGR_SRCA | AT91C_CKGR_OUTA_0)
+#define BOARD_PLLACOUNT		(0x3F << 8)
+#define BOARD_MULA		((AT91C_CKGR_MULA << 2) & (PLLA_MULA << 18))
+#define BOARD_DIVA		(AT91C_CKGR_DIVA & 6)
+
+#define BOARD_PRESCALER_MAIN_CLOCK	(AT91C_PMC_MDIV_4 \
+					| AT91C_PMC_CSS_MAIN_CLK)
+
+#define BOARD_PRESCALER_PLLA		(AT91C_PMC_MDIV_4 \
+					| AT91C_PMC_CSS_PLLA_CLK)
+
+#elif defined(CONFIG_CPU_CLK_528MHZ)
 
 /* PCK = 528MHz, MCK = 132MHz */
 #define PLLA_MULA		43
@@ -210,4 +238,5 @@
  */
 #define CONFIG_SYS_BASE_MCI	AT91C_BASE_HSMCI0
 
+void setLEDColor(void);
 #endif /* __SAMA5D3_XPLAINED_H__ */

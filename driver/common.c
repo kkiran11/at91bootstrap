@@ -35,6 +35,9 @@
 
 load_function load_image;
 
+#ifdef CONFIG_QNX_USE_BOOT_DATA
+extern int load_nandflash_boot_data(struct image_info *image);
+#endif
 #ifdef CONFIG_SDCARD
 char filename[FILENAME_BUF_LEN];
 #ifdef CONFIG_OF_LIBFDT
@@ -44,68 +47,70 @@ char of_filename[FILENAME_BUF_LEN];
 
 void init_load_image(struct image_info *image)
 {
-	memset(image,		0, sizeof(*image));
+    memset(image,       0, sizeof(*image));
 #ifdef CONFIG_SDCARD
-	memset(filename,	0, FILENAME_BUF_LEN);
+    memset(filename,    0, FILENAME_BUF_LEN);
 #ifdef CONFIG_OF_LIBFDT
-	memset(of_filename,	0, FILENAME_BUF_LEN);
+    memset(of_filename, 0, FILENAME_BUF_LEN);
 #endif
 #endif
 
-	image->dest = (unsigned char *)JUMP_ADDR;
+    image->dest = (unsigned char *)JUMP_ADDR;
 #ifdef CONFIG_OF_LIBFDT
-	image->of_dest = (unsigned char *)OF_ADDRESS;
+    image->of_dest = (unsigned char *)OF_ADDRESS;
 #endif
 
 #ifdef CONFIG_FLASH
-	image->offset = IMG_ADDRESS | 0x10000000;
+    image->offset = IMG_ADDRESS | 0x10000000;
 #if !defined(CONFIG_LOAD_LINUX) && !defined(CONFIG_LOAD_ANDROID)
-	image->length = IMG_SIZE;
+    image->length = IMG_SIZE;
 #endif
 #ifdef CONFIG_OF_LIBFDT
-	image->of_offset = OF_OFFSET | 0x10000000;
+    image->of_offset = OF_OFFSET | 0x10000000;
 #endif
 #endif
 
 #ifdef CONFIG_NANDFLASH
-	image->offset = IMG_ADDRESS;
+    image->offset = IMG_ADDRESS;
 #if !defined(CONFIG_LOAD_LINUX) && !defined(CONFIG_LOAD_ANDROID)
-	image->length = IMG_SIZE;
+    image->length = IMG_SIZE;
 #endif
 #ifdef CONFIG_OF_LIBFDT
-	image->of_offset = OF_OFFSET;
+    image->of_offset = OF_OFFSET;
 #endif
 #endif
 
 #ifdef CONFIG_DATAFLASH
-	image->offset = IMG_ADDRESS;
+    image->offset = IMG_ADDRESS;
 #if !defined(CONFIG_LOAD_LINUX) && !defined(CONFIG_LOAD_ANDROID)
-	image->length = IMG_SIZE;
+    image->length = IMG_SIZE;
 #endif
 #ifdef CONFIG_OF_LIBFDT
-	image->of_offset = OF_OFFSET;
+    image->of_offset = OF_OFFSET;
 #endif
 #endif
 
 #ifdef CONFIG_SDCARD
-	image->filename = filename;
-	strcpy(image->filename, IMAGE_NAME);
+    image->filename = filename;
+    strcpy(image->filename, IMAGE_NAME);
 #ifdef CONFIG_OF_LIBFDT
-	image->of_filename = of_filename;
+    image->of_filename = of_filename;
 #endif
 #endif
 
 #if defined(CONFIG_LOAD_LINUX) || defined(CONFIG_LOAD_ANDROID)
-	load_image = &load_kernel;
+    load_image = &load_kernel;
 #else
 #if defined(CONFIG_DATAFLASH)
-	load_image = &load_dataflash;
+    load_image = &load_dataflash;
 #elif defined(CONFIG_FLASH)
-	load_image = &load_norflash;
+    load_image = &load_norflash;
+#elif defined(CONFIG_NANDFLASH) && defined(CONFIG_QNX_USE_BOOT_DATA)
+    load_image = &load_nandflash_boot_data;
 #elif defined(CONFIG_NANDFLASH)
-	load_image = &load_nandflash;
+    load_image = &load_nandflash;
 #elif defined(CONFIG_SDCARD)
-	load_image = &load_sdcard;
+    load_image = &load_sdcard;
 #else
 #error "No booting media_str specified!"
 #endif
@@ -114,32 +119,32 @@ void init_load_image(struct image_info *image)
 
 void load_image_done(int retval)
 {
-	char *media;
+    char *media;
 
 #if defined(CONFIG_FLASH)
-	media = "FLASH: ";
+    media = "FLASH: ";
 #elif defined(CONFIG_NANDFLASH)
-	media = "NAND: ";
+    media = "NAND: ";
 #elif defined(CONFIG_DATAFLASH)
-	media = "SF: ";
+    media = "SF: ";
 #elif defined(CONFIG_SDCARD)
-	media = "SD/MMC: ";
+    media = "SD/MMC: ";
 #else
-	media = NULL;
+    media = NULL;
 #endif
 
-	if (media)
-		usart_puts(media);
+    if (media)
+        usart_puts(media);
 
-	if (retval == 0){
-		usart_puts("Done to load image\n");
-	}
-	if (retval == -1) {
-		usart_puts("Failed to load image\n");
-		while(1);
-	}
-	if (retval == -2) {
-		usart_puts("Success to recovery\n");
-		while (1);
-	}
+    if (retval == 0){
+        usart_puts("Done to load image\n");
+    }
+    if (retval == -1) {
+        usart_puts("Failed to load image\n");
+        while(1);
+    }
+    if (retval == -2) {
+        usart_puts("Success to recovery\n");
+        while (1);
+    }
 }

@@ -149,8 +149,9 @@
 #define	AT91C_PIN_PE(io)	(4 * PIO_NUM_IO + io)
 
 /* define the register */
-#define PIO_REG_PER		0x00
-#define PIO_REG_OER		0x10
+#define PIO_REG_PER			0x00
+#define PIO_REG_OER			0x10
+#define PIO_REG_SODR		0x30
 #define PIO_REG_CODR		0x34
 #define PIO_REG_PPUDR		0x60
 #define	PIO_REG_PPDDR		0x90
