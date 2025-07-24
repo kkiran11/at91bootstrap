@@ -71,6 +71,7 @@ unsigned int at91_wdt_set_counter(unsigned int count)
 
 	return 0;
 }
+#endif
 
 unsigned int at91_wdt_reload_counter(void)
 {
@@ -78,4 +79,4 @@ unsigned int at91_wdt_reload_counter(void)
 
 	return 0;
 }
-#endif
+

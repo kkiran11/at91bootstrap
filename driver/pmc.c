@@ -32,7 +32,6 @@
 #include "rstc.h"
 #include "debug.h"
 #include "div.h"
-#include "pmc.h"
 
 static inline void write_pmc(unsigned int offset, const unsigned int value)
 {
@@ -42,6 +41,115 @@ static inline void write_pmc(unsigned int offset, const unsigned int value)
 static inline unsigned int read_pmc(unsigned int offset)
 {
 	return readl(offset + AT91C_BASE_PMC);
+}
+
+static void PMC_SelectInt12M_Osc(void)
+{
+    unsigned long  tmp, count;
+
+    /* enable internal RC 12 MHz */
+	tmp = read_pmc(PMC_MOR);
+	tmp &= (~AT91C_CKGR_MOSCRCEN);
+	tmp &= (~AT91C_CKGR_PASSWD);
+	tmp |= AT91C_CKGR_MOSCRCEN;
+	tmp |= AT91C_CKGR_PASSWD;
+	write_pmc(PMC_MOR, tmp);
+    /* Wait internal 12 MHz RC Startup Time for clock stabilization (software loop) */
+    for (count = 0; count < 0x100000; count++); 
+
+    /* switch MAIN clock to internal RC 12 MHz */
+	tmp = read_pmc(PMC_MOR);
+	tmp &= (~AT91C_CKGR_MOSCSEL);
+	tmp &= (~AT91C_CKGR_PASSWD);
+	tmp |= AT91C_CKGR_PASSWD;
+	write_pmc(PMC_MOR, tmp);
+    /* wait MAIN clock status change for internal RC 12 MHz selection*/
+	while (!(read_pmc(PMC_SR) & AT91C_PMC_MOSCSELS))
+	;
+    /* in case where MCK is running on MAIN CLK */
+	while (!(read_pmc(PMC_SR) & AT91C_PMC_MCKRDY))
+	;
+
+    /* disable external OSC   */
+	tmp = read_pmc(PMC_MOR);
+	tmp &= (~AT91C_CKGR_MOSCXTEN);
+	tmp &= (~AT91C_CKGR_PASSWD);
+	tmp |= AT91C_CKGR_PASSWD;
+	write_pmc(PMC_MOR, tmp);
+}
+
+void sci_clock_init()
+{
+	unsigned long tmp;
+
+	/* Switch the MCK to the main clock oscillator */
+	tmp = read_pmc(PMC_MCKR);
+	tmp &= (~AT91C_PMC_CSS);
+	tmp |= AT91C_PMC_CSS_MAIN_CLK;
+	write_pmc(PMC_MCKR, tmp);
+	while (!(read_pmc(PMC_SR) & AT91C_PMC_MCKRDY))
+	;
+
+	/* enable external OSC 48 MHz bypass */
+	tmp = read_pmc(PMC_MOR);
+	tmp |= AT91C_CKGR_MOSCXTBY;
+	tmp |= AT91C_CKGR_PASSWD;
+	write_pmc(PMC_MOR, tmp);
+
+	/* switch MAIN clock to external OSC */
+	tmp = read_pmc(PMC_MOR);
+	tmp |= AT91C_CKGR_MOSCSEL;
+	tmp |= AT91C_CKGR_PASSWD;
+	write_pmc(PMC_MOR, tmp);
+
+	/* wait MAIN clock status change for external OSC 48 MHz selection*/
+	while (!(read_pmc(PMC_SR) & AT91C_PMC_MOSCSELS))
+	;
+	/* in case where MCK is running on MAIN CLK */
+	while (!(read_pmc(PMC_SR) & AT91C_PMC_MCKRDY))
+	;
+
+	/* When external clock frequency is 48MHz */
+	tmp = AT91C_CKGR_SRCA | 
+		AT91C_CKGR_OUTA_0 |
+		(0x3FUL << 8) |
+		(PLLA_MULA << 18) | //(0xFUL << 18) |
+		BOARD_DIVA; //(AT91C_CKGR_DIVA & 6);
+	/* Always disable PLL before configuring it */
+	write_pmc((unsigned int)PMC_PLLAR, 0 | AT91C_CKGR_SRCA);
+	write_pmc((unsigned int)PMC_PLLAR, tmp);
+	while (!(read_pmc(PMC_SR) & AT91C_PMC_LOCKA))
+	;
+
+	write_pmc(PMC_PLLICPR, 0);
+	write_pmc(PMC_PLLICPR, AT91C_PMC_IPLLA_3);
+
+	tmp = read_pmc(PMC_MCKR);
+	tmp &= ~AT91C_PMC_PLLADIV2_2;
+	write_pmc(PMC_MCKR, tmp);
+	while (!(read_pmc(PMC_SR) & AT91C_PMC_MCKRDY))
+	;
+
+	tmp = read_pmc(PMC_MCKR);
+	tmp &= (~AT91C_PMC_ALT_PRES);
+	tmp |= AT91C_PMC_PRES_ALT_CLK;
+	write_pmc(PMC_MCKR, tmp);
+	while (!(read_pmc(PMC_SR) & AT91C_PMC_MCKRDY))
+	;
+
+	//Finally we get 512/4= 128MHz as final frequency
+	tmp &= (~AT91C_PMC_MDIV_3);
+	tmp |= AT91C_PMC_MDIV_4;
+	write_pmc(PMC_MCKR, tmp);
+	while (!(read_pmc(PMC_SR) & AT91C_PMC_MCKRDY))
+	;
+
+	tmp = read_pmc(PMC_MCKR);
+	tmp &= (~AT91C_PMC_CSS);
+	tmp |= AT91C_PMC_CSS_PLLA_CLK;
+	write_pmc(PMC_MCKR, tmp);
+	while (!(read_pmc(PMC_SR) & AT91C_PMC_MCKRDY))
+	;
 }
 
 void lowlevel_clock_init()
@@ -74,17 +182,6 @@ void lowlevel_clock_init()
 	while (!(read_pmc(PMC_SR) & AT91C_PMC_MOSCXTS))
 		;
 
-#if defined(SAMA5D2)
-	/* Enable a measurement of the external oscillator */
-	tmp = read_pmc(PMC_MCFR);
-	tmp |= AT91C_CKGR_CCSS_XTAL_OSC;
-	tmp |= AT91C_CKGR_RCMEAS;
-	write_pmc(PMC_MCFR, tmp);
-
-	while (!(read_pmc(PMC_MCFR) & AT91C_CKGR_MAINRDY))
-		;
-#endif
-
 	/* Switch from internal 12MHz RC to the 12MHz oscillator */
 	tmp = read_pmc(PMC_MOR);
 	tmp &= (~AT91C_CKGR_MOSCXTBY);
@@ -98,7 +195,11 @@ void lowlevel_clock_init()
 	tmp |= AT91C_CKGR_PASSWD;
 	write_pmc(PMC_MOR, tmp);
 
+	/* wait MAIN clock status change for external OSC 48 MHz selection*/
 	while (!(read_pmc(PMC_SR) & AT91C_PMC_MOSCSELS))
+		;
+	/* in case where MCK is running on MAIN CLK */
+	while (!(read_pmc(PMC_SR) & AT91C_PMC_MCKRDY))
 		;
 
 #if !defined(SAMA5D4) && !defined(SAMA5D2)
@@ -355,88 +456,22 @@ int pmc_sam9x5_enable_periph_clk(unsigned int periph_id)
 	return 0;
 }
 
-int pmc_uckr_clk(unsigned int is_on)
+void pmc_enable_periph_generated_clk(unsigned int periph_id)
 {
-	unsigned int uckr = read_pmc(PMC_UCKR);
-	unsigned int sr;
-
-	if (is_on) {
-		uckr |= (AT91C_CKGR_UPLLCOUNT_DEFAULT | AT91C_CKGR_UPLLEN_ENABLED);
-		sr = AT91C_PMC_LOCKU;
-	} else {
-		uckr &= ~AT91C_CKGR_UPLLEN_ENABLED;
-		sr = 0;
-	}
-
-	write_pmc(PMC_UCKR, uckr);
-
-	do {
-		udelay(1);
-	} while ((read_pmc(PMC_SR) & AT91C_PMC_LOCKU) != sr);
-
-	return 0;
-}
-
-int pmc_enable_periph_generated_clk(unsigned int periph_id,
-				    unsigned int clk_source,
-				    unsigned int div)
-{
-	unsigned int regval, status;
-	unsigned int timeout = 1000;
-
-	if (periph_id > 0x7f)
-		return -1;
-
-	if (div > 0xff)
-		return -1;
-
-	if (!(read_pmc(PMC_UCKR) & AT91C_CKGR_UPLLEN_ENABLED))
-		pmc_uckr_clk(1);
+	unsigned int regval;
 
 	write_pmc(PMC_PCR, periph_id);
 	regval = read_pmc(PMC_PCR);
 	regval &= ~AT91C_PMC_GCKCSS;
 	regval &= ~AT91C_PMC_GCKDIV;
-
-	switch (clk_source) {
-	case GCK_CSS_SLOW_CLK:
-		regval |= AT91C_PMC_GCKCSS_SLOW_CLK;
-		break;
-	case GCK_CSS_MAIN_CLK:
-		regval |= AT91C_PMC_GCKCSS_MAIN_CLK;
-		break;
-	case GCK_CSS_PLLA_CLK:
-		regval |= AT91C_PMC_GCKCSS_PLLA_CLK;
-		break;
-	case GCK_CSS_UPLL_CLK:
-		regval |= AT91C_PMC_GCKCSS_UPLL_CLK;
-		break;
-	case GCK_CSS_MCK_CLK:
-		regval |= AT91C_PMC_GCKCSS_MCK_CLK;
-		break;
-	case GCK_CSS_AUDIO_CLK:
-		regval |= AT91C_PMC_GCKCSS_AUDIO_CLK;
-		break;
-	default:
-		dbg_info("Error GCK clock source selection!\n");
-		return -1;
-	}
-
-	regval |= AT91C_PMC_CMD |
-		  AT91C_PMC_GCKDIV_(div) |
-		  AT91C_PMC_GCKEN;
+	regval |= (AT91C_PMC_GCKCSS_PLLA_CLK
+			| AT91C_PMC_CMD
+			| AT91C_PMC_GCKDIV_(1)
+			| AT91C_PMC_GCKEN);
 
 	write_pmc(PMC_PCR, regval);
 
-	do {
-		udelay(1);
-		status = read_pmc(PMC_SR);
-	} while ((!!(--timeout)) && (!(status & AT91C_PMC_GCKRDY)));
-
-	if (!timeout)
-		dbg_info("Timeout waiting for GCK ready!\n");
-
-	return 0;
+	write_pmc(PMC_PCR, periph_id);
 }
 
 void pmc_sam9x5_disable_periph_clk(unsigned int periph_id)
@@ -514,27 +549,14 @@ unsigned int pmc_get_generated_clock(unsigned int periph_id)
 	divider += 1;
 
 	clock_source = tmp & AT91C_PMC_GCKCSS;
-	switch (clock_source) {
-	case AT91C_PMC_GCKCSS_MAIN_CLK:
+	if (clock_source == AT91C_PMC_GCKCSS_MAIN_CLK)
 #ifdef BOARD_MAINOSC
 		freq = BOARD_MAINOSC;
 #else
 		freq = 0;
 #endif
-		break;
-	case AT91C_PMC_GCKCSS_PLLA_CLK:
+	 else if (clock_source == AT91C_PMC_GCKCSS_PLLA_CLK)
 		freq = pmc_get_plla_freq();
-		break;
-	case AT91C_PMC_GCKCSS_UPLL_CLK:
-		freq = 480000000;
-		break;
-	case AT91C_PMC_GCKCSS_MCK_CLK:
-		freq = MASTER_CLOCK;
-		break;
-	default:
-		freq = 0;
-		break;
-	}
 
 	freq = div(freq, divider);
 
@@ -617,6 +639,28 @@ int pmc_sys_clk(unsigned int sys_clock_mask, unsigned int is_on)
 void pmc_pck_setup(unsigned int reg_offset, unsigned int reg_value)
 {
 	write_pmc(reg_offset, reg_value);
+}
+
+int pmc_uckr_clk(unsigned int is_on)
+{
+	unsigned int uckr = read_pmc(PMC_UCKR);
+	unsigned int sr;
+
+	if (is_on) {
+		uckr |= (AT91C_CKGR_UPLLCOUNT_DEFAULT | AT91C_CKGR_UPLLEN_ENABLED);
+		sr = AT91C_PMC_LOCKU;
+	} else {
+		uckr &= ~AT91C_CKGR_UPLLEN_ENABLED;
+		sr = 0;
+	}
+
+	write_pmc(PMC_UCKR, uckr);
+
+	do {
+		udelay(1);
+	} while ((read_pmc(PMC_SR) & AT91C_PMC_LOCKU) != sr);
+
+	return 0;
 }
 
 unsigned int pmc_usb_setup(void)

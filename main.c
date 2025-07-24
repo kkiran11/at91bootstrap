@@ -33,9 +33,15 @@
 #include "tz_utils.h"
 #include "pm.h"
 #include "act8865.h"
-#include "backup.h"
 #include "secure.h"
 #include "sfr_aicredir.h"
+
+#include "timer.h"
+#include "hardware.h"
+#include "debug.h"
+
+#include "sama5d3_xplained.h"
+#include "watchdog.h"
 
 #ifdef CONFIG_HW_DISPLAY_BANNER
 static void display_banner (void)
@@ -44,37 +50,64 @@ static void display_banner (void)
 }
 #endif
 
+static void dram_test(void)
+{
+	unsigned int read_data = 0;
+	volatile unsigned int *p = (volatile unsigned int *)0x20000000;
+
+	dbg_info("Start DRAM test\n");
+
+	while(p < (volatile unsigned int *)0x40000000)
+	{
+		*p = p;/*test_pat;*/
+		p++;
+	}
+
+	/*wait for  seconds*/
+	mdelay(200);
+
+	p = (volatile unsigned int *)0x20000000;
+	while (p < (volatile unsigned int *)0x40000000)
+	{
+		read_data = *p;
+		if (read_data != (unsigned int)p)
+		{
+			dbg_info("Failed: read %d from addr %d\n", read_data, p);
+		}
+
+		if (p == (volatile unsigned int *)0x26f00000)
+		{
+			dbg_info("read %d from addr %d\n", read_data, p);
+		}
+		p++;
+	}
+
+	dbg_info("End of DRAM test\n");
+}
+
 int main(void)
 {
 	struct image_info image;
 	int ret;
 
+	at91_wdt_reload_counter();
+		
 #ifdef CONFIG_HW_INIT
 	hw_init();
 #endif
 
 #if defined(CONFIG_SCLK)
-#if !defined(CONFIG_SCLK_BYPASS)
+#if !defined(CONFIG_SAMA5D4)
 	slowclk_enable_osc32();
 #endif
-#endif
-
-#ifdef CONFIG_BACKUP_MODE
-	ret = backup_mode_resume();
-	if (ret) {
-#ifdef CONFIG_REDIRECT_ALL_INTS_AIC
-		redirect_interrupts_to_nsaic();
-#endif
-		slowclk_switch_osc32();
-
-		return ret;
-	}
 #endif
 
 #ifdef CONFIG_HW_DISPLAY_BANNER
 	display_banner();
 #endif
 
+	at91_wdt_reload_counter();
+	
 #ifdef CONFIG_REDIRECT_ALL_INTS_AIC
 	redirect_interrupts_to_nsaic();
 #endif
@@ -83,18 +116,30 @@ int main(void)
 	load_board_hw_info();
 #endif
 
+	at91_wdt_reload_counter();
+	
 #ifdef CONFIG_PM
 	at91_board_pm();
 #endif
 
+	at91_wdt_reload_counter();
+
 #ifdef CONFIG_ACT8865
 	act8865_workaround();
-
-	act8945a_suspend_charger();
 #endif
 
+	at91_wdt_reload_counter();
+	
+	setLEDColor();
+
+/*	dram_test();*/
+
+	at91_wdt_reload_counter();
+	
 	init_load_image(&image);
 
+	at91_wdt_reload_counter();
+		
 #if defined(CONFIG_SECURE)
 	image.dest -= sizeof(at91_secure_header_t);
 #endif
@@ -110,11 +155,7 @@ int main(void)
 	load_image_done(ret);
 
 #ifdef CONFIG_SCLK
-#ifdef CONFIG_SCLK_BYPASS
-	slowclk_switch_osc32_bypass();
-#else
-	slowclk_switch_osc32();
-#endif
+//	slowclk_switch_osc32();
 #endif
 
 #if defined(CONFIG_ENTER_NWD)
@@ -123,5 +164,7 @@ int main(void)
 	/* point never reached with TZ support */
 #endif
 
+	at91_wdt_reload_counter();
+	
 	return JUMP_ADDR;
 }

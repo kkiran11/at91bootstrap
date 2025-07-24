@@ -704,7 +704,7 @@ void hw_init(void)
         {(char *)0, 0, 0, PIO_DEFAULT, PIO_OUTPUT},
     };
 
-	uint32_t i, j;
+	int i, j;
 
     /* Disable watchdog */
     at91_disable_wdt();
