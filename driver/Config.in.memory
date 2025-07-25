@@ -77,9 +77,6 @@ config CONFIG_LPDDR1
 config CONFIG_LPDDR2
 	bool "Low-power DDR2-SDRAM"
 
-config CONFIG_LPDDR3
-	bool "Low-power DDR3-SDRAM"
-
 config CONFIG_DDR2
 	bool "DDR2-SDRAM"
 
@@ -89,11 +86,6 @@ config CONFIG_DDR3
 endchoice
 
 endmenu
-
-config CONFIG_SAMA5D2_LPDDR2
-	bool
-	default y if CONFIG_LPDDR2 && SAMA5D2
-	default n
 
 config	CONFIG_SDRAM_16BIT
 	bool "Use 16 bit SDRAM"
